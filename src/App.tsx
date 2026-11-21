@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, BookOpen, Check, Flame, LoaderCircle, LockKeyhole, Plus, X } from 'lucide-react'
+import { AlertTriangle, BookOpen, Check, Flame, LoaderCircle, LockKeyhole, Plus } from 'lucide-react'
 
+type Difficulty = 'easy' | 'moderate' | 'hard'
 type Task = { id: number; title: string; subject: string; priority: 'High' | 'Medium'; done: boolean }
-type Question = { question: string; options: string[]; answer: number; explanation: string }
+type Question = { question: string; options: string[]; answer: number; explanation: string; difficulty: Difficulty }
 type Quiz = { taskId: number; taskTitle: string; questions: Question[] }
 type Book = { id: number; name: string; subject: string; bring: boolean }
 type TimeBlock = { id: number; time: string; subject: string; duration: string }
@@ -81,12 +82,7 @@ export default function App() {
     if (nextTasks.length > 0 && nextDone / nextTasks.length >= 0.85 && nextProgress.celebratedDate !== today) {
       const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('en-CA')
       const continues = nextProgress.lastStreakDate === yesterday || nextProgress.lastStreakDate === today
-      nextProgress = {
-        ...nextProgress,
-        streak: continues ? nextProgress.streak + (nextProgress.lastStreakDate === today ? 0 : 1) : 1,
-        lastStreakDate: today,
-        celebratedDate: today,
-      }
+      nextProgress = { ...nextProgress, streak: continues ? nextProgress.streak + (nextProgress.lastStreakDate === today ? 0 : 1) : 1, lastStreakDate: today, celebratedDate: today }
       setCelebrate(true)
       window.setTimeout(() => setCelebrate(false), 2200)
     }
@@ -97,39 +93,28 @@ export default function App() {
     if (task.done || loadingTaskId !== null) return
     setError(''); setPendingTask(task); setLoadingTaskId(task.id); setQuiz(null)
     try {
-      const response = await fetch('/api/quiz', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: { title: task.title, subject: task.subject }, questionCount: 3 }),
-      })
+      const response = await fetch('/api/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: { title: task.title, subject: task.subject }, questionCount: 10 }) })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Gemini could not generate the quiz. Please retry.')
-      if (!Array.isArray(data.questions) || data.questions.length !== 3) throw new Error('Gemini did not return all quiz questions. Please retry.')
+      if (!response.ok) throw new Error(data.error || `Quiz service failed (${response.status}).`)
+      if (!Array.isArray(data.questions) || data.questions.length !== 10) throw new Error('Gemini did not return all 10 questions. Please retry.')
       setQuiz({ taskId: task.id, taskTitle: task.title, questions: data.questions })
       setQuestionIndex(0); setSelectedAnswer(null); setAnswered(false); setAllCorrect(true)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Quiz generation failed. Please retry.')
-    } finally { setLoadingTaskId(null) }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Quiz generation failed. Please retry.') }
+    finally { setLoadingTaskId(null) }
   }
 
   function submitAnswer() {
     if (!quiz || selectedAnswer === null || answered) return
-    const correct = selectedAnswer === quiz.questions[questionIndex].answer
-    setAllCorrect(value => value && correct)
+    setAllCorrect(value => value && selectedAnswer === quiz.questions[questionIndex].answer)
     setAnswered(true)
   }
-
   function nextQuestion() {
     if (!quiz || !answered) return
-    if (questionIndex + 1 < quiz.questions.length) {
-      setQuestionIndex(index => index + 1); setSelectedAnswer(null); setAnswered(false); return
-    }
+    if (questionIndex + 1 < quiz.questions.length) { setQuestionIndex(index => index + 1); setSelectedAnswer(null); setAnswered(false); return }
     const perfect = allCorrect && selectedAnswer === quiz.questions[questionIndex].answer
     const nextTasks = tasks.map(task => task.id === quiz.taskId ? { ...task, done: true } : task)
-    setTasks(nextTasks)
-    recordDayIfEarned(nextTasks, perfect)
-    setQuiz(null); setPendingTask(null); setError('')
+    setTasks(nextTasks); recordDayIfEarned(nextTasks, perfect); setQuiz(null); setPendingTask(null); setError('')
   }
-
   function retryQuiz() { if (pendingTask) void beginTaskQuiz(pendingTask) }
   function addBook(event: React.FormEvent) {
     event.preventDefault()
@@ -146,7 +131,6 @@ export default function App() {
 
   return <main className="app-shell">
     <header><div className="brand"><span>JT</span><strong>JustToday</strong></div><div className="streak"><Flame size={18}/>{progress.streak} day streak {progress.saverCount > 0 && <small className="saver-badge">· {progress.saverCount} saver</small>}</div></header>
-
     {screen === 'today' && <section>
       <div className="hero"><div><p>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</p><h1>Today at school</h1></div><div className="streak"><Flame size={18}/> {completionPercent}% complete</div></div>
       <div className="grid">
@@ -156,28 +140,22 @@ export default function App() {
         </article>
         <article className="card schedule"><div className="card-title"><div><p>TODAY'S LESSONS</p><h2>School schedule</h2></div></div><div className="lesson"><time>08:00</time><div><strong>Physics</strong><span>Gravitation & escape velocity</span></div></div><div className="lesson"><time>09:00</time><div><strong>Chemistry</strong><span>Organic reactions</span></div></div><div className="lesson"><time>10:00</time><div><strong>Mathematics</strong><span>Quadratic equations</span></div></div></article>
       </div>
-      <article className="card time-blocks"><div className="card-title"><div><p>FOCUS PLAN</p><h2>Time blocks</h2></div></div><div className="blocks">{blocks.map(block => <div key={block.id}><time>{new Date(`2000-01-01T${block.time}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time><strong>{block.subject}</strong><span>{block.duration}</span></div>)}</div>
-        <form className="block-form" onSubmit={addBlock}><label>Time<input type="time" value={blockTime} onChange={event => setBlockTime(event.target.value)} required/></label><label>Subject<input value={blockSubject} onChange={event => setBlockSubject(event.target.value)} placeholder="e.g. Biology" required/></label><label>Duration<select value={blockDuration} onChange={event => setBlockDuration(event.target.value)}><option>25 min</option><option>45 min</option><option>60 min</option><option>90 min</option></select></label><button className="add-button"><Plus size={16}/> Add time block</button></form>
-      </article>
+      <article className="card time-blocks"><div className="card-title"><div><p>FOCUS PLAN</p><h2>Time blocks</h2></div></div><div className="blocks">{blocks.map(block => <div key={block.id}><time>{new Date(`2000-01-01T${block.time}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time><strong>{block.subject}</strong><span>{block.duration}</span></div>)}</div><form className="block-form" onSubmit={addBlock}><label>Time<input type="time" value={blockTime} onChange={event => setBlockTime(event.target.value)} required/></label><label>Subject<input value={blockSubject} onChange={event => setBlockSubject(event.target.value)} placeholder="e.g. Biology" required/></label><label>Duration<select value={blockDuration} onChange={event => setBlockDuration(event.target.value)}><option>25 min</option><option>45 min</option><option>60 min</option><option>90 min</option></select></label><button className="add-button"><Plus size={16}/> Add time block</button></form></article>
     </section>}
-
     {screen === 'tasks' && <section><div className="hero"><div><p>85% COMPLETE TO EARN TODAY'S STREAK</p><h1>Today's priorities</h1></div><div className="progress-ring" style={{ '--progress': `${completionPercent * 3.6}deg` } as React.CSSProperties}>{completionPercent}%</div></div>
-      <aside className="persistent-alert"><LockKeyhole size={20}/><div><strong>Every task requires its own Gemini quiz</strong><span>Finish all 3 MCQs; tasks lock as complete and cannot be undone.</span></div></aside>
-      {progress.saverCount > 0 && <aside className="saver-note"><Flame size={18}/> Streak saver ready: get every answer correct in a task quiz to earn a saver for a missed day.</aside>}
+      <aside className="persistent-alert"><LockKeyhole size={20}/><div><strong>Every task requires its own Gemini quiz</strong><span>Complete 10 MCQs: 3 easy, 4 moderate, and 3 hard. Tasks lock when done.</span></div></aside>
+      {progress.saverCount > 0 && <aside className="saver-note"><Flame size={18}/> Streak saver ready: get all 10 answers correct to earn a saver for a missed day.</aside>}
       {error && !quiz && <aside className="quiz-error" role="alert"><AlertTriangle size={19}/><span>{error}</span><button onClick={retryQuiz}>Retry quiz</button></aside>}
       <div className="task-stack">{tasks.map((task, index) => <article className={`task-card ${task.done ? 'done' : ''}`} key={task.id}><span className="task-number">0{index + 1}</span><span className="task-info"><small>{task.subject} · {task.priority} priority</small><strong>{task.title}</strong></span>{task.done ? <span className="task-completed"><Check size={17}/> Quiz passed · locked</span> : <button className="task-start" disabled={loadingTaskId !== null} onClick={() => void beginTaskQuiz(task)}>{loadingTaskId === task.id ? <><LoaderCircle className="spin" size={17}/> Generating</> : 'Complete + quiz'}</button>}</article>)}</div>
       {completionPercent >= 85 && <aside className="study-action"><Check/><div><strong>Streak earned today!</strong><span>{progress.streak} day streak is now active.</span></div></aside>}
     </section>}
-
-    {screen === 'streak' && <section><div className="hero"><div><p>PROGRESS THAT ADDS UP</p><h1>Study streak</h1></div><div className="streak"><Flame size={18}/>{progress.streak} days</div></div><article className="card weekly"><h2>Weekly reflection</h2><p>What helped you stay consistent this week?</p><textarea value={reflection} onChange={event => { setReflection(event.target.value); localStorage.setItem('justtoday-reflection-v1', event.target.value) }} placeholder="My biggest win was..."/><p className="saver-note">Streak savers earned by getting every answer correct can protect one missed day.</p></article><article className="card"><h2>Streak saver</h2><p>{progress.saverCount ? `${progress.saverCount} saver available` : 'Get every question correct in a task quiz to earn a saver.'}</p><p className="muted">A saver is used automatically if you miss a day, keeping your streak alive. Reach 85% task completion to count the day.</p></article></section>}
-
+    {screen === 'streak' && <section><div className="hero"><div><p>PROGRESS THAT ADDS UP</p><h1>Study streak</h1></div><div className="streak"><Flame size={18}/>{progress.streak} days</div></div><article className="card weekly"><h2>Weekly reflection</h2><p>What helped you stay consistent this week?</p><textarea value={reflection} onChange={event => { setReflection(event.target.value); localStorage.setItem('justtoday-reflection-v1', event.target.value) }} placeholder="My biggest win was..."/><p className="saver-note">Streak savers earned by getting every answer correct can protect one missed day.</p></article><article className="card"><h2>Streak saver</h2><p>{progress.saverCount ? `${progress.saverCount} saver available` : 'Get all 10 answers correct in a task quiz to earn a saver.'}</p><p className="muted">A saver is used automatically if you miss a day, keeping your streak alive. Reach 85% task completion to count the day.</p></article></section>}
     <nav><button className={screen === 'today' ? 'active' : ''} onClick={() => setScreen('today')}><BookOpen size={19}/><span>Today</span></button><button className={screen === 'tasks' ? 'active' : ''} onClick={() => setScreen('tasks')}><Check size={19}/><span>Tasks</span></button><button className={screen === 'streak' ? 'active' : ''} onClick={() => setScreen('streak')}><Flame size={19}/><span>Streak</span></button></nav>
-
     {celebrate && <div className="streak-celebration" role="status"><span className="confetti">✦</span><div><Flame size={30}/><strong>85% — streak kept alive!</strong><span>{progress.streak} day study streak</span></div><span className="confetti">✦</span></div>}
     {pendingTask && (quiz || error || loadingTaskId !== null) && <div className="quiz-backdrop"><section className="quiz-modal" role="dialog" aria-modal="true" aria-labelledby="quiz-title"><div className="quiz-top"><div><p>REQUIRED · GEMINI MCQ</p><h2 id="quiz-title">{pendingTask.title}</h2></div><span className="required-chip"><LockKeyhole size={14}/> Required</span></div>
-      {loadingTaskId !== null && <div className="quiz-loading"><LoaderCircle className="spin" size={30}/><strong>Gemini is preparing 3 questions…</strong><span>Task remains incomplete until you complete its quiz.</span></div>}
+      {loadingTaskId !== null && <div className="quiz-loading"><LoaderCircle className="spin" size={30}/><strong>Gemini is preparing 10 questions…</strong><span>3 easy · 4 moderate · 3 hard. Task remains incomplete until finished.</span></div>}
       {error && <div className="quiz-failure" role="alert"><AlertTriangle/><strong>Could not generate Gemini quiz.</strong><p>{error}</p><button className="quiz-primary" onClick={retryQuiz}>Retry quiz</button></div>}
-      {quiz && <><div className="quiz-progress">Question {questionIndex + 1} of {quiz.questions.length}<span>Task stays locked until finished</span></div><h3 className="quiz-question">{quiz.questions[questionIndex].question}</h3><div className="quiz-options">{quiz.questions[questionIndex].options.map((option, index) => <button key={`${questionIndex}-${option}`} className={`${selectedAnswer === index ? 'selected ' : ''}${answered && index === quiz.questions[questionIndex].answer ? 'correct' : ''}${answered && selectedAnswer === index && index !== quiz.questions[questionIndex].answer ? 'incorrect' : ''}`} disabled={answered} onClick={() => setSelectedAnswer(index)}>{String.fromCharCode(65 + index)}<span>{option}</span></button>)}</div>{answered && <p className="quiz-explanation">{selectedAnswer === quiz.questions[questionIndex].answer ? 'Correct! ' : 'Not quite. '}{quiz.questions[questionIndex].explanation}</p>}<button className="quiz-primary" disabled={selectedAnswer === null} onClick={answered ? nextQuestion : submitAnswer}>{answered ? questionIndex + 1 === quiz.questions.length ? 'Finish quiz and complete task' : 'Next question' : 'Check answer'}</button></>}
+      {quiz && <><div className="quiz-progress">Question {questionIndex + 1} of {quiz.questions.length}<span className={`difficulty-chip ${quiz.questions[questionIndex].difficulty}`}>{quiz.questions[questionIndex].difficulty}</span></div><h3 className="quiz-question">{quiz.questions[questionIndex].question}</h3><div className="quiz-options">{quiz.questions[questionIndex].options.map((option, index) => <button key={`${questionIndex}-${option}`} className={`${selectedAnswer === index ? 'selected ' : ''}${answered && index === quiz.questions[questionIndex].answer ? 'correct' : ''}${answered && selectedAnswer === index && index !== quiz.questions[questionIndex].answer ? 'incorrect' : ''}`} disabled={answered} onClick={() => setSelectedAnswer(index)}>{String.fromCharCode(65 + index)}<span>{option}</span></button>)}</div>{answered && <p className="quiz-explanation">{selectedAnswer === quiz.questions[questionIndex].answer ? 'Correct! ' : 'Not quite. '}{quiz.questions[questionIndex].explanation}</p>}<button className="quiz-primary" disabled={selectedAnswer === null} onClick={answered ? nextQuestion : submitAnswer}>{answered ? questionIndex + 1 === quiz.questions.length ? 'Finish quiz and complete task' : 'Next question' : 'Check answer'}</button></>}
     </section></div>}
   </main>
 }
