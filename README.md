@@ -1,24 +1,24 @@
 # JustToday
 
-A daily planner for Class 11 and 12 students: school packing checklist, lessons, editable focus blocks, task quizzes, and streak tracking.
+A daily school planner for Class 11 and 12 students. Each task is locked as complete only after the student finishes its required Gemini-generated multiple-choice quiz.
 
-## Run the UI
+## Run the interface locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-The app stores demo planner data in this browser's local storage. Time blocks and books can be added, removed, and edited in the UI. On a new calendar day, streak progress is evaluated: complete at least 85% of tasks to advance the streak. A perfect score on a task's Gemini quiz earns one streak saver; if the 85% target is missed, a saved streak saver preserves the streak once. Without one, it resets to day 1.
+The Gemini endpoint is a Vercel serverless function (`/api/quiz`). For local testing of that endpoint, use Vercel CLI (`npx vercel dev`) after setting `GEMINI_API_KEY` in your local Vercel environment. Plain `vite dev` serves the UI but does not execute Vercel API routes.
 
-## Gemini quizzes
+## Deploy on Vercel
 
-Every task can only be completed by finishing its required, task-specific Gemini multiple-choice quiz. A perfect quiz earns a streak saver. The quiz API is a Vercel serverless function; the Gemini API key stays on the server.
+Import `AzeemAhmed7/JustToday` from GitHub. Use the Vite preset, build command `npm run build`, output directory `dist`.
 
-In Vercel Project Settings → Environment Variables, add:
+In Vercel → Project → Settings → Environment Variables, create:
 
 ```text
 GEMINI_API_KEY=your_Gemini_API_key
 ```
 
-Redeploy after setting the key. For local API route testing, run with Vercel CLI (`npx vercel dev`) and set the same server-only environment variable. Plain `npm run dev` starts the Vite UI but does not execute Vercel API functions.
+Do not use the `VITE_` prefix: the key is used only by the serverless function and must not be exposed in browser code. Redeploy after adding it. Every task needs its own generated MCQ quiz; if Gemini cannot generate one, the task stays incomplete and the app offers a retry.
