@@ -1,24 +1,7 @@
-# JustToday
+## Fixing an invalid Gemini API key
 
-A colorful daily planner for Class 11 and 12. Every task requires a Gemini-generated quiz with 10 MCQs: 3 easy, 4 moderate, and 3 hard.
+`API key not valid` is a Google credential/configuration error; changing frontend code cannot make an invalid key valid. In Vercel → Project → Settings → Environment Variables, replace the value of the exact key `GEMINI_API_KEY` with a newly created Google AI Studio API key from https://aistudio.google.com/apikey. Do not include quote marks, spaces, or a `VITE_` prefix. Ensure the key is not deleted/restricted from Generative Language API access, save, then redeploy the Production deployment. The API now returns a direct explanation for this error.
 
-## Gemini quiz setup
+## Visual identity
 
-In Vercel, open **Project → Settings → Environment Variables** and add:
-
-```text
-GEMINI_API_KEY=your_Google_AI_Studio_API_key
-```
-
-Do not use a `VITE_` prefix. Select Production (and Preview if desired), save, and redeploy the latest deployment. The API key must be a valid Google AI Studio Gemini key with the Generative Language API enabled and available quota. The app now reports specific provider errors (invalid key/access, quota, model, or server error) instead of hiding them behind one generic message. Keep the key secret; never paste it into frontend code or public chat.
-
-## Deployment
-
-Vercel automatically deploys commits pushed to the connected GitHub repository. To run locally:
-
-```bash
-npm install
-npm run dev
-```
-
-The Gemini endpoint is a Vercel serverless function. For full local API testing use `npx vercel dev` with `GEMINI_API_KEY` set in the local environment.
+The header currently displays the repository owner's GitHub profile image. If the Vercel project uses a different profile image, provide its public image URL or add the desired image as `public/profile.png`; Vercel does not automatically expose its dashboard profile image to deployed app code.
